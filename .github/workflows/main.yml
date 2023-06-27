@@ -52,5 +52,5 @@ jobs:
       - name: Test
         run: pnpm test
         env:
-          KV_REDIS_REST_URL: http://srh:80
+          UPSTASH_REDIS_REST_URL: http://srh:80
           UPSTASH_REDIS_REST_TOKEN: ${{ env.SRH_TOKEN }}
