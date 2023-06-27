@@ -31,6 +31,30 @@ for await (const [key, value] of db.iterator({ gt: 'a' })) {
   console.log(value) // 2
 }
 ```
+## API
+
+The API of `upstash-redis-level` follows that of [`abstract-level`](https://github.com/Level/abstract-level) with three additional constructor options (see below).
+
+### `db = new RedisLevel([options])`
+
+Besides `abstract-level` options, the optional `options` object may contain:
+
+- redis: an instance of `@upstash/redis` client
+- debug: a boolean to enable debug logs
+- namespace: a string to prefix all keys with. The default is `level`
+
+## Querying Redis Level with Redis commands
+
+### List all keys in lexicographic order
+
+```redis
+ZRANGE level:z - + BYLEX
+```
+### Get value of a key
+
+```redis
+HGET level:h <key>
+```
 
 ## Install
 
