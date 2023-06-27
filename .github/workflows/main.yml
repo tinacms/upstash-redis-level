@@ -6,28 +6,29 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+env:
+  SRH_TOKEN: example_token
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - macOS-latest
-        #  - windows-latest
-        node-version: [14.x]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+  container-job:
+    runs-on: ubuntu-latest
+    container: denoland/deno
+    services:
+      redis:
+        image: redis/redis-stack-server:6.2.6-v6 # 6.2 is the Upstash compatible Redis version
+      srh:
+        image: hiett/serverless-redis-http:latest
+        env:
+          SRH_MODE: env # We are using env mode because we are only connecting to one server.
+          SRH_TOKEN: ${{ env.SRH_TOKEN }}
+          SRH_CONNECTION_STRING: redis://redis:6379
 
     steps:
       - name: Check out code
         uses: actions/checkout@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 2
+          fetch-depth: 2      # You can place your normal testing steps here. In this example, we are running SRH against the upstash/upstash-redis test suite.
 
       - uses: pnpm/action-setup@v2.2.2
         with:
