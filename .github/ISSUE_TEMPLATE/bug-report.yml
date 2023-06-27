@@ -43,5 +43,5 @@ body:
       options:
         - label: Follow our [Code of Conduct](https://github.com/tinacms/tinacms/blob/main/CODE_OF_CONDUCT.md)
           required: true
-        - label: Check that there isn't [already an issue](https://github.com/tinacms/sqlite-level/issues) that reports the same bug.
+        - label: Check that there isn't [already an issue](https://github.com/tinacms/upstash-redis-level/issues) that reports the same bug.
           required: true
