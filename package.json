@@ -29,13 +29,10 @@
     "build"
   ],
   "scripts": {
-    "watch": "tinacms-scripts watch",
     "build": "tinacms-scripts build",
-    "dev": "tinacms-scripts dev",
     "test": "jest --coverage",
     "test:suite": "pnpm run build && node ./src/suite.test.js",
     "types": "tsc",
-    "docs": "npx typedoc",
     "version": "pnpm exec changeset version",
     "version:snapshot": "pnpm exec changeset version --snapshot",
     "publish": "npm publish -r --no-git-checks --access public",
