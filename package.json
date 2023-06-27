@@ -1,5 +1,5 @@
 {
-  "name": "@upstash/redis-level",
+  "name": "upstash-redis-level",
   "description": "@upstash/redis backed abstract-level database for Node.js",
   "version": "1.0.0",
   "main": "dist/index.js",
@@ -11,14 +11,15 @@
     "leveldown",
     "levelup",
     "memory",
-    "sqlite"
+    "upstash",
+    "redis"
   ],
   "bugs": {
-    "url": "https://github.com/tinacms/sqlite-level/issues"
+    "url": "https://github.com/tinacms/upstash-redis-level/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/tinacms/sqlite-level.git"
+    "url": "https://github.com/tinacms/upstash-redis-level.git"
   },
   "files": [
     "dist/index.js",
@@ -33,7 +34,12 @@
     "dev": "tinacms-scripts dev",
     "test": "jest --coverage",
     "test:suite": "pnpm run build && node ./src/suite.test.js",
-    "docs": "npx typedoc"
+    "types": "tsc",
+    "docs": "npx typedoc",
+    "version": "pnpm exec changeset version",
+    "version:snapshot": "pnpm exec changeset version --snapshot",
+    "publish": "npm publish -r --no-git-checks --access public",
+    "publish:beta": "npm publish -r --tag beta --no-git-checks --access public"
   },
   "dependencies": {
     "module-error": "^1.0.2",
