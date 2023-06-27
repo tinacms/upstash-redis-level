@@ -29,7 +29,14 @@ const encode = (value: any) => {
 const decode = (value: string) => {
   return decodeURIComponent(value)
 }
+const encodeFilter = (filter: string) => {
+  if (filter.endsWith('\uFFFF')) {
+    return encodeURIComponent(filter.slice(0, -1)) + '\uFFFF'
+  }
+  return encodeURIComponent(filter)
+}
 export type RedisLevelOptions<K, V> = {
+  debug?: boolean
   redis: Redis
   namespace?: string
 } & AbstractDatabaseOptions<K, V>
@@ -94,6 +101,7 @@ declare interface IteratorOptions<KDefault> {
   gte?: KDefault
   lt?: KDefault
   lte?: KDefault
+  debug: boolean
 }
 
 const queryFromOptions = (key: string, options: IteratorOptions<any>) => {
@@ -112,12 +120,14 @@ const queryFromOptions = (key: string, options: IteratorOptions<any>) => {
   const exclusiveUpperBound = options.lte === undefined && options.lt !== undefined
   const noLowerBound = lowerBound === '-' || lowerBound === '+'
   const noUpperBound = upperBound === '-' || upperBound === '+'
+  const encodedUpperBound = encodeFilter(upperBound)
+  const encodedLowerBound = encodeFilter(lowerBound)
   if (options.reverse) {
-    query[1] = noUpperBound ? upperBound : exclusiveUpperBound ? `(${encode(upperBound)}` : `[${encode(upperBound)}`
-    query[2] = noLowerBound ? lowerBound : exclusiveLowerBound ? `(${encode(lowerBound)}` : `[${encode(lowerBound)}`
+    query[1] = noUpperBound ? upperBound : exclusiveUpperBound ? `(${encodedUpperBound}` : `[${encodedUpperBound}`
+    query[2] = noLowerBound ? lowerBound : exclusiveLowerBound ? `(${encodedLowerBound}` : `[${encodedLowerBound}`
   } else {
-    query[1] = noLowerBound ? lowerBound : exclusiveLowerBound ? `(${encode(lowerBound)}` : `[${encode(lowerBound)}`
-    query[2] = noUpperBound ? upperBound : exclusiveUpperBound ? `(${encode(upperBound)}` : `[${encode(upperBound)}`
+    query[1] = noLowerBound ? lowerBound : exclusiveLowerBound ? `(${encodedLowerBound}` : `[${encodedLowerBound}`
+    query[2] = noUpperBound ? upperBound : exclusiveUpperBound ? `(${encodedUpperBound}` : `[${encodedUpperBound}`
   }
 
   query[3] = {
@@ -147,6 +157,7 @@ class RedisIterator<KDefault, VDefault> extends AbstractIterator<
   private readonly resultLimit: number
   private results: any[]
   private finished: boolean
+  private debug: boolean
 
   constructor(db: RedisLevel<KDefault, VDefault>, options: IteratorOptions<KDefault>) {
     super(db, options)
@@ -156,6 +167,7 @@ class RedisIterator<KDefault, VDefault> extends AbstractIterator<
     this.offset = options.offset || 0
     this.results = []
     this.finished = false
+    this.debug = options.debug || false
   }
 
   async _next(callback: NextCallback<KDefault, VDefault>) {
@@ -166,11 +178,17 @@ class RedisIterator<KDefault, VDefault> extends AbstractIterator<
       const getKeys = this.options.keys
       const getValues = this.options.values
       const query = queryFromOptions(this.db.zKey, { ...this.options, offset: this.offset, limit: this.resultLimit })
+      if (this.debug) {
+        console.log('query', query)
+      }
       let keys: string[] = []
       try {
         keys = await this.redis.zrange<string[]>(...query)
       } catch (e) {
         console.log(e)
+      }
+      if (this.debug) {
+        console.log('keys', keys)
       }
       if (!keys || keys.length === 0) {
         this.finished = true
@@ -193,6 +211,9 @@ class RedisIterator<KDefault, VDefault> extends AbstractIterator<
       this.offset += this.resultLimit
     }
     const result = this.results.shift()
+    if (this.debug) {
+      console.log('result', result)
+    }
     return this.db.nextTick(callback, null, ...result)
   }
 }
@@ -201,6 +222,7 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
   public readonly redis: Redis
   public readonly hKey: string
   public readonly zKey: string
+  private readonly debug: boolean
 
   constructor(options: RedisLevelOptions<KDefault, VDefault>) {
     super({ encodings: { utf8: true }, snapshots: false }, options)
@@ -208,6 +230,7 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
     const namespace = options.namespace || 'level'
     this.hKey = `${namespace}:h`
     this.zKey = `${namespace}:z`
+    this.debug = options.debug || false
   }
 
   get type() {
@@ -215,16 +238,28 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
   }
 
   async _open(options: AbstractOpenOptions, callback: (error?: Error) => void) {
+    if (this.debug) {
+      console.log('RedisLevel#_open')
+    }
     this.nextTick(callback)
   }
 
   async _close(callback: (error?: Error) => void) {
+    if (this.debug) {
+      console.log('RedisLevel#_close')
+    }
     this.nextTick(callback)
   }
 
   async _get(key: string, options: { keyEncoding: 'utf8', valueEncoding: 'utf8' }, callback: (error?: Error, value?: string) => void) {
+    if (this.debug) {
+      console.log('RedisLevel#_get', key)
+    }
     const data = await this.redis.hget<string>(this.hKey, encode(key))
     if (data !== null) {
+      if (this.debug) {
+        console.log('RedisLevel#_get', key, 'found', decode(data))
+      }
       return this.nextTick(callback, null, decode(data))
     } else {
       return this.nextTick(
@@ -237,6 +272,9 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
   }
 
   async _getMany(keys: string[], options: { keyEncoding: 'utf8', valueEncoding: 'utf8 '}, callback: (error?: Error, value?: string) => void) {
+    if (this.debug) {
+      console.log('RedisLevel#_getMany', keys)
+    }
     try {
       const data = await this.redis.hmget(this.hKey, ...keys.map((key) => encode(key)))
       // TODO not sure if the we need to encode the key when retrieving it from the data object...
@@ -257,18 +295,27 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
   }
 
   async _put(key: string, value: string, options: { keyEncoding: 'utf8', valueEncoding: 'utf8'}, callback: (error?: Error) => void) {
+    if (this.debug) {
+      console.log('RedisLevel#_put', key, value)
+    }
     await this.redis.hset<string>(this.hKey, { [encode(key)]: encode(value) })
     await this.redis.zadd<string>(this.zKey, { score: 0, member: encode(key) })
     this.nextTick(callback)
   }
 
   async _del(key: Buffer, options: any, callback: (error?: Error) => void) {
+    if (this.debug) {
+      console.log('RedisLevel#_del', key)
+    }
     await this.redis.hdel(this.hKey, encode(key))
     await this.redis.zrem(this.zKey, encode(key))
     this.nextTick(callback)
   }
 
   async _batch(batch: BatchOperation[], options: any, callback: (error?: Error) => void): Promise<void> {
+    if (this.debug) {
+      console.log('RedisLevel#_batch', batch)
+    }
     if (batch.length === 0) return this.nextTick(callback)
     const p = this.redis.pipeline()
     for (const op of batch) {
@@ -285,12 +332,15 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
   }
 
   async _clear(options: ClearOptions<KDefault>, callback: (error?: Error) => void): Promise<void> {
+    if (this.debug) {
+      console.log('RedisLevel#_clear', options)
+    }
     let limit = options.limit !== Infinity && options.limit >= 0 ? options.limit : Infinity
     let offset = 0
     const fetchLimit = 100
     let total = 0
     while (true) {
-      const query = queryFromOptions(this.zKey, {keys: true, values: false, ...options, offset, limit: fetchLimit })
+      const query = queryFromOptions(this.zKey, {debug: false, keys: true, values: false, ...options, offset, limit: fetchLimit })
       let keys: string[] = []
       try {
         keys = await this.redis.zrange<string[]>(...query)
@@ -317,6 +367,6 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
   _iterator(
     options: IteratorOptions<KDefault>
   ): RedisIterator<KDefault, VDefault> {
-    return new RedisIterator<KDefault, VDefault>(this, options)
+    return new RedisIterator<KDefault, VDefault>(this, { ...options, debug: this.debug })
   }
 }
