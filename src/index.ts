@@ -19,7 +19,7 @@ import {
 import { NextCallback } from 'abstract-level/types/abstract-iterator'
 import ModuleError from 'module-error'
 import { Redis } from '@upstash/redis'
-import { ZRangeCommandOptions } from '@upstash/redis/types/pkg/commands/zrange'
+import { ZRangeCommandOptions } from '@upstash/redis'
 
 const DEFAULT_LIMIT = 50
 
