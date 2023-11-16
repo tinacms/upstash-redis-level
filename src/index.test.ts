@@ -14,7 +14,6 @@
 
 import {RedisLevel} from './index'
 import 'isomorphic-fetch'
-import {Redis} from '@upstash/redis'
 
 const ModuleError = require('module-error')
 
@@ -23,21 +22,17 @@ const keyNotFoundError = (key: string) => new ModuleError(`Key ${key} was not fo
 })
 
 describe('redis-level', () => {
-  let redis: Redis
   let level: RedisLevel
-  beforeEach(() => {
-    redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL || 'http://localhost:8079',
-      token: process.env.UPSTASH_REDIS_REST_TOKEN || 'mytoken',
-      automaticDeserialization: true,
-    })
-  })
 
   describe('json encoding', () => {
     let namespace = `test-${Math.random()}`
     beforeEach(async () => {
       level = new RedisLevel<string, string>({
-        redis,
+        redis: {
+          url: process.env.UPSTASH_REDIS_REST_URL || 'http://localhost:8079',
+          token: process.env.UPSTASH_REDIS_REST_TOKEN || 'mytoken',
+          automaticDeserialization: true,
+        },
         namespace,
         keyEncoding: 'json',
         valueEncoding: 'json',
@@ -62,7 +57,11 @@ describe('redis-level', () => {
   describe('default encoding', () => {
     beforeEach(async () => {
       level = new RedisLevel<string, string>({
-        redis,
+        redis: {
+          url: process.env.UPSTASH_REDIS_REST_URL || 'http://localhost:8079',
+          token: process.env.UPSTASH_REDIS_REST_TOKEN || 'mytoken',
+          automaticDeserialization: true,
+        },
         namespace: `test-${Math.random()}`
       })
     })
