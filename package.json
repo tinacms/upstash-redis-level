@@ -41,7 +41,7 @@
   "dependencies": {
     "module-error": "^1.0.2",
     "abstract-level": "^1.0.3",
-    "@upstash/redis": "^1.21.0"
+    "@upstash/redis": "1.24.3"
   },
   "devDependencies": {
     "@tinacms/scripts": "^1.0.0",
