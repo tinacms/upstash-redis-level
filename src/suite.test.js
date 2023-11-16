@@ -7,7 +7,7 @@ const { Redis } = require('@upstash/redis')
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || 'http://localhost:8079',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || 'example-token',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || 'mytoken',
 })
 
 suite({
