@@ -35,9 +35,16 @@ const encodeFilter = (filter: string) => {
   }
   return encodeURIComponent(filter)
 }
+
+type RedisConnectionOptions = {
+  url: string
+  token: string
+  automaticDeserialization?: boolean
+}
+
 export type RedisLevelOptions<K, V> = {
+  redis: RedisConnectionOptions | Redis
   debug?: boolean
-  redis: Redis
   namespace?: string
 } & AbstractDatabaseOptions<K, V>
 
@@ -226,7 +233,11 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
 
   constructor(options: RedisLevelOptions<KDefault, VDefault>) {
     super({ encodings: { utf8: true }, snapshots: false }, options)
-    this.redis = options.redis
+    this.redis = (typeof options.redis === 'object' &&
+      'hmget' in options.redis &&
+      typeof options.redis.hmget === 'function') ?
+      options.redis as Redis :
+      new Redis(options.redis as RedisConnectionOptions)
     const namespace = options.namespace || 'level'
     this.hKey = `${namespace}:h`
     this.zKey = `${namespace}:z`
