@@ -142,7 +142,7 @@ describe('redis-level', () => {
 
     test.skip('ordering', async () => {
       const pairs =  [ [ '', 'empty' ], [ '\t', '\t' ], [ '12', '12' ], [ '2', '2' ], [ 'a', 'A' ], [ 'a🐄', 'A🐄' ], [ 'b', 'B' ], [ 'd', 'D' ], [ 'e', 'E' ], [ 'f', 'F' ], [ 'ff', 'FF' ], [ '~', '~' ], [ '🐄', '🐄' ] ]
-      const batch = await level.batch()
+      const batch = level.batch()
       for (const pair of pairs) {
         batch.put(pair[0], pair[1])
       }
@@ -151,7 +151,7 @@ describe('redis-level', () => {
       const iterator = level.iterator()
       const results = await iterator.all()
       console.log(results.map(result => result[0]))
-      // TODO https://github.com/upstash/upstash-redis/issues/400
+      // TODO https://github.com/hiett/serverless-redis-http/issues/20
     })
 
     test.skip('lexical sorting', async () => {
@@ -160,8 +160,7 @@ describe('redis-level', () => {
       const orderedEncodedKeys = orderedKeys.map(key => encodeURIComponent(key)).sort().map(key => decodeURIComponent(key))
       console.log({orderedKeys})
       console.log({orderedEncodedKeys})
-      // TODO this test isn't complete and won't work correctly with upstash
-      // TODO https://github.com/upstash/upstash-redis/issues/400
+      // TODO https://github.com/hiett/serverless-redis-http/issues/20
     })
 
     test('clear range', async () => {
