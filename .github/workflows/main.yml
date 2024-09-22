@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 2      # You can place your normal testing steps here. In this example, we are running SRH against the upstash/upstash-redis test suite.
