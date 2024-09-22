@@ -30,9 +30,9 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 2      # You can place your normal testing steps here. In this example, we are running SRH against the upstash/upstash-redis test suite.
 
-      - uses: pnpm/action-setup@v2.2.2
+      - uses: pnpm/action-setup@v4
         with:
-          version: 7.4.0
+          version: 9
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v2
