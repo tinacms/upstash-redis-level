@@ -41,7 +41,7 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: pnpm run publish
+          publish: pnpm run release
           version: pnpm run version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,8 +50,8 @@ jobs:
       - name: Release to @dev channel
         if: steps.changesets.outputs.published != 'true'
         run: |
-          git checkout -- .
+          git restore --source=HEAD .
           pnpm version:snapshot
-          pnpm run publish:beta
+          pnpm run release:beta
         env:
           NODE_AUTH_TOKEN: ''
