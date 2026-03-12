@@ -6,10 +6,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: pnpm/action-setup@v2.2.2
+      - uses: pnpm/action-setup@v4
         with:
-          version: 7.4.0
-      - uses: actions/checkout@v1
+          version: 9
+      - uses: actions/checkout@v4
       - name: Install
         run: pnpm install
       - name: Danger
