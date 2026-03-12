@@ -30,6 +30,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -44,11 +45,15 @@ jobs:
         run: |
           pnpm version:snapshot
           pnpm run publish:beta
+        env:
+          NODE_AUTH_TOKEN: ''
 
       - name: Publish
         if: matrix.channel == 'latest'
         run: |
           pnpm run publish
+        env:
+          NODE_AUTH_TOKEN: ''
       - name: Create release pull request
         uses: changesets/action@v1
         if: matrix.channel == 'latest'
