@@ -53,7 +53,7 @@ jobs:
         run: |
           pnpm run publish
       - name: Create release pull request
-        uses: changesets/action@v4
+        uses: changesets/action@v1
         if: matrix.channel == 'latest'
         with:
           version: pnpm run version
