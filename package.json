@@ -35,8 +35,8 @@
     "types": "tsc",
     "version": "pnpm exec changeset version",
     "version:snapshot": "pnpm exec changeset version --snapshot",
-    "publish": "npm publish -r --no-git-checks --access public --provenance",
-    "publish:beta": "npm publish -r --tag beta --no-git-checks --access public --provenance"
+    "publish": "npm publish --access public --provenance",
+    "publish:beta": "npm publish --tag beta --access public --provenance"
   },
   "dependencies": {
     "@upstash/redis": "1.24.3",

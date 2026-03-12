@@ -5,22 +5,15 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    strategy:
-      max-parallel: 1
-      matrix:
-        channel:
-          - latest
-          - dev
-
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
       id-token: write
     steps:
       - uses: actions/checkout@v6
         with:
-          # This makes Actions fetch all Git history so that Changesets can generate changelogs with the correct commits
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
@@ -44,24 +37,21 @@ jobs:
       - name: Build Types
         run: pnpm types
 
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          publish: pnpm run publish
+          version: pnpm run version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ''
+
       - name: Release to @dev channel
-        if: matrix.channel == 'dev'
+        if: steps.changesets.outputs.published != 'true'
         run: |
+          git checkout -- .
           pnpm version:snapshot
           pnpm run publish:beta
         env:
           NODE_AUTH_TOKEN: ''
-
-      - name: Publish
-        if: matrix.channel == 'latest'
-        run: |
-          pnpm run publish
-        env:
-          NODE_AUTH_TOKEN: ''
-      - name: Create release pull request
-        uses: changesets/action@v1
-        if: matrix.channel == 'latest'
-        with:
-          version: pnpm run version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
