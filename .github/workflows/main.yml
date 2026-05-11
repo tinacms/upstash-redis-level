@@ -5,51 +5,314 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, synchronize, reopened]
-env:
-  SRH_TOKEN: example_token
+    types: [opened, synchronize, reopened, labeled]
+
+# Least-privilege default. Individual jobs widen as needed.
+permissions:
+  contents: read
 
 jobs:
-  container-job:
+  build:
+    name: Build
+    # Skip on label events unless it's the 'tagged' label that drives publish-pr,
+    # so adding unrelated labels doesn't re-run the build.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.action != 'labeled' ||
+      github.event.label.name == 'tagged'
+    # Services aren't supported on macOS runners, so this job is Linux-only.
     runs-on: ubuntu-latest
-    container: denoland/deno
+    timeout-minutes: 15
+
+    env:
+      SRH_TOKEN: example_token
+
     services:
       redis:
-        image: redis/redis-stack-server:6.2.6-v6 # 6.2 is the Upstash compatible Redis version
+        # 6.2 is the Upstash-compatible Redis line; pinned tag avoids drift.
+        image: redis/redis-stack-server:6.2.6-v6
       srh:
-        image: hiett/serverless-redis-http:latest
+        # Pinned to 0.0.10 (digest sha256:65128347…) for supply-chain safety;
+        # bump intentionally rather than tracking :latest.
+        image: hiett/serverless-redis-http:0.0.10@sha256:65128347949bca511e448fd7238780d624573d74c22b79155a7563db19e9b678
         env:
-          SRH_MODE: env # We are using env mode because we are only connecting to one server.
+          SRH_MODE: env
           SRH_TOKEN: ${{ env.SRH_TOKEN }}
+          # SRH and redis share the services network — address by service name.
           SRH_CONNECTION_STRING: redis://redis:6379
+        ports:
+          - 8079:80
 
     steps:
-      - name: Check out code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
-          fetch-depth: 2      # You can place your normal testing steps here. In this example, we are running SRH against the upstash/upstash-redis test suite.
+          fetch-depth: 2
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
-          version: 9
+          package_json_file: package.json
+          run_install: false
 
       - name: Setup Node.js environment
         uses: actions/setup-node@v6
         with:
-          node-version: 22
-          cache: 'pnpm'
+          node-version-file: .nvmrc
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
-      - name: Build Types
+      - name: Types
         run: pnpm types
 
       - name: Test
         run: pnpm test
         env:
-          UPSTASH_REDIS_REST_URL: http://srh:80
+          UPSTASH_REDIS_REST_URL: http://localhost:8079
           UPSTASH_REDIS_REST_TOKEN: ${{ env.SRH_TOKEN }}
+
+  publish:
+    name: Publish to NPM or Create Version PR
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write # required for npm provenance attestation
+    steps:
+      - name: Generate a token
+        uses: actions/create-github-app-token@v3
+        id: generate-token
+        with:
+          # uses https://github.com/organizations/tinacms/settings/apps/release-bot-allow-prs-and-push
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_APP_SECRET }}
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
+          run_install: false
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Types
+        run: pnpm types
+
+      - name: Create Release Pull Request
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      - name: Set snapshot version
+        if: steps.changesets.outputs.hasChangesets == 'true'
+        run: |
+          timestamp=$(date +'%Y%m%d%H%M%S')
+          jq --arg version "0.0.0-$timestamp" '.version = $version' package.json > package.tmp.json
+          mv package.tmp.json package.json
+
+      - name: Publish to NPM
+        # --no-git-checks: the snapshot version step mutates package.json,
+        # so the working tree is intentionally dirty at publish time.
+        run: pnpm publish --provenance --no-git-checks --access public --tag "$NPM_TAG"
+        env:
+          NPM_TAG: ${{ steps.changesets.outputs.hasChangesets == 'true' && 'beta' || 'latest' }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+  publish-pr:
+    name: Publish PR preview
+    needs: build
+    if: >-
+      github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'tagged')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # required for npm provenance attestation
+      pull-requests: write # required to comment install instructions on the PR
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
+          run_install: false
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Types
+        run: pnpm types
+
+      - name: Set snapshot version
+        run: |
+          timestamp=$(date +'%Y%m%d%H%M%S')
+          jq --arg version "0.0.0-$timestamp" '.version = $version' package.json > package.tmp.json
+          mv package.tmp.json package.json
+
+      - name: Publish to NPM
+        # --no-git-checks: the snapshot version step above mutates package.json,
+        # so the working tree is intentionally dirty at publish time.
+        run: pnpm publish --provenance --no-git-checks --access public --tag "$NPM_TAG"
+        env:
+          NPM_TAG: ${{ github.head_ref || github.ref_name }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+      - name: Get published package versions
+        id: package-versions
+        run: |
+          set -e
+
+          echo "🔍 Checking for modified package.json files..."
+
+          # Find all modified package.json files (uncommitted changes from snapshot version step)
+          modified_packages=$(git diff --name-only | grep 'package\.json$' || true)
+
+          if [ -z "$modified_packages" ]; then
+            echo "⚠️ No modified package.json files found"
+            echo "packages_csv=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "📦 Found modified package.json files:"
+          echo "$modified_packages"
+
+          # Build a CSV with one package per line (package,version)
+          packages_csv=""
+
+          for pkg_file in $modified_packages; do
+            if [ -f "$pkg_file" ]; then
+              pkg_name=$(jq -r '.name' "$pkg_file")
+              pkg_version=$(jq -r '.version' "$pkg_file")
+
+              if [ "$pkg_name" != "null" ] && [ "$pkg_version" != "null" ]; then
+                echo "  Found: $pkg_name@$pkg_version"
+
+                if [ -n "$packages_csv" ]; then
+                  packages_csv="${packages_csv}"$'\n'
+                fi
+
+                packages_csv="${packages_csv}${pkg_name},${pkg_version}"
+              fi
+            fi
+          done
+
+          echo "📋 Generated CSV:"
+          echo "$packages_csv"
+
+          # Use heredoc for multiline output
+          echo "packages_csv<<EOF" >> $GITHUB_OUTPUT
+          echo "$packages_csv" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR with install instructions
+        if: steps.package-versions.outputs.packages_csv != ''
+        uses: actions/github-script@v7
+        env:
+          PACKAGES_CSV: ${{ steps.package-versions.outputs.packages_csv }}
+        with:
+          script: |
+            console.log('🔍 Starting PR comment script...');
+
+            if (
+              !context.payload ||
+              !context.payload.pull_request ||
+              !context.payload.pull_request.head ||
+              !context.payload.pull_request.head.ref ||
+              !context.payload.pull_request.number
+            ) {
+              throw new Error('Missing pull_request context. Cannot comment on PR.');
+            }
+
+            const packagesCsv = process.env.PACKAGES_CSV;
+            console.log('📦 Packages CSV:', packagesCsv);
+
+            // Parse CSV format: one line per package "name,version"
+            const packages = packagesCsv.trim().split('\n').map(line => {
+              const [name, version] = line.split(',');
+              return { name, version };
+            });
+            console.log('✅ Parsed packages:', packages);
+
+            const branchName = context.payload.pull_request.head.ref;
+            console.log('🌿 Branch name:', branchName);
+
+            let packagesSection = '\n**Published Packages:**\n';
+            for (const pkg of packages) {
+              packagesSection += `- \`${pkg.name}@${pkg.version}\`\n`;
+            }
+
+            console.log('📝 Generated packages section:', packagesSection);
+
+            // Generate install commands using actual versions
+            const installCommands = packages.map(pkg => `pnpm add ${pkg.name}@${pkg.version}`).join('\n');
+
+            // Generate npmx.dev links: one to the package page, one to this exact version
+            let linksSection = '\n**View on npm:**\n';
+            for (const pkg of packages) {
+              const pkgUrl = `https://npmx.dev/package/${pkg.name}`;
+              const versionUrl = `${pkgUrl}/v/${pkg.version}`;
+              linksSection += `- [\`${pkg.name}\`](${pkgUrl}) · [\`${pkg.version}\`](${versionUrl})\n`;
+            }
+
+            const comment = `## 📦 Tagged Release Published
+
+            Your tagged PR has been published! You can install the packages using their version tags:
+
+            \`\`\`bash
+            ${installCommands}
+            \`\`\`
+
+            ${packagesSection}
+            ${linksSection}
+
+            **Commit:** \`${context.sha}\`
+            `;
+
+            console.log('💬 Posting comment to PR #' + context.payload.pull_request.number);
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: comment
+            });
+
+            console.log('✅ Comment posted successfully!');
