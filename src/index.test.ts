@@ -13,7 +13,6 @@
 
 
 import {RedisLevel} from './index'
-import 'isomorphic-fetch'
 
 const ModuleError = require('module-error')
 
@@ -93,6 +92,31 @@ describe('redis-level', () => {
     test('put quoted values', async () => {
       await level.put('mykey', '"foo"')
       expect(await level.get('mykey')).toEqual('"foo"')
+    })
+
+    test('get missing key rejects with LEVEL_NOT_FOUND', async () => {
+      await expect(level.get('does-not-exist')).rejects.toMatchObject({
+        code: 'LEVEL_NOT_FOUND',
+      })
+    })
+
+    test('del removes a key', async () => {
+      await level.put('delkey', 'delvalue')
+      expect(await level.get('delkey')).toEqual('delvalue')
+      await level.del('delkey')
+      await expect(level.get('delkey')).rejects.toMatchObject({
+        code: 'LEVEL_NOT_FOUND',
+      })
+    })
+
+    test('getMany returns values in order, including unicode keys', async () => {
+      await level.put('gm1', 'v1')
+      await level.put('gm2', 'v2')
+      // Unicode key exercises the encode/decode round-trip: hmget keys its
+      // result object by the encoded field name, not the raw key.
+      await level.put('🔑', 'emoji')
+      const results = await level.getMany(['gm1', 'missing', 'gm2', '🔑'])
+      expect(results).toEqual(['v1', undefined, 'v2', 'emoji'])
     })
 
     test('iterator without limits', async () => {
