@@ -5,16 +5,16 @@
     "allowJs": true,
     "declaration": true,
     "esModuleInterop": true,
-    "emitDeclarationOnly": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "target": "ES6",
+    "target": "ES2022",
     "strict": true,
-    "lib": ["esnext", "dom"]
+    "lib": ["esnext", "dom"],
+    "types": ["node"]
   },
   "exclude": [
     "node_modules",

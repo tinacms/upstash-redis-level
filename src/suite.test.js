@@ -1,5 +1,3 @@
-require('isomorphic-fetch')
-
 const test = require('tape')
 const suite = require('abstract-level/test')
 const { RedisLevel } = require('../dist/index.js')

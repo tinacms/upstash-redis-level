@@ -13,7 +13,6 @@
 
 
 import {RedisLevel} from './index'
-import 'isomorphic-fetch'
 
 const ModuleError = require('module-error')
 
