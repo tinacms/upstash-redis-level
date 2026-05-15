@@ -137,11 +137,6 @@ const queryFromOptions = (key: string, options: IteratorOptions<any>) => {
     query[2] = noUpperBound ? upperBound : exclusiveUpperBound ? `(${encodedUpperBound}` : `[${encodedUpperBound}`
   }
 
-  query[3] = {
-    byLex: true,
-    rev: options.reverse,
-  }
-
   if (options.limit !== Infinity) {
     query[3] = {
       ...query[3],
@@ -192,7 +187,7 @@ class RedisIterator<KDefault, VDefault> extends AbstractIterator<
       try {
         keys = await this.redis.zrange<string[]>(...query)
       } catch (e) {
-        console.log(e)
+        console.error(e)
       }
       if (this.debug) {
         console.log('keys', keys)
@@ -210,7 +205,10 @@ class RedisIterator<KDefault, VDefault> extends AbstractIterator<
           if (!values) {
             result.push(undefined)
           } else {
-            result.push(values[key] !== undefined ? decode(String(values[key])) : undefined)
+            // hmget keys its result object by the field names we passed (the
+            // encoded keys). Object.hasOwn guards against keys like '__proto__'.
+            const value = Object.hasOwn(values, key) ? values[key] : undefined
+            result.push(value !== undefined ? decode(String(value)) : undefined)
           }
         }
         this.results.push(result)
@@ -288,14 +286,19 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
     }
     try {
       const data = await this.redis.hmget(this.hKey, ...keys.map((key) => encode(key)))
-      // TODO not sure if the we need to encode the key when retrieving it from the data object...
       if (data) {
-        return this.nextTick(callback, null, keys.map((key) => data[key] ? decode(String(data[key])) : undefined))
+        // hmget keys its result object by the field names we passed (the
+        // encoded keys), so look each value up by the encoded key.
+        return this.nextTick(callback, null, keys.map((key) => {
+          const encoded = encode(key)
+          const value = Object.hasOwn(data, encoded) ? data[encoded] : undefined
+          return value != null ? decode(String(value)) : undefined
+        }))
       } else {
-        return this.nextTick(callback, null, keys.map((key) => undefined))
+        return this.nextTick(callback, null, keys.map(() => undefined))
       }
     } catch (e) {
-      console.log(e)
+      console.error(e)
       return this.nextTick(
         callback,
         new ModuleError(`Unexpected error in getMany`, {
@@ -314,7 +317,7 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
     this.nextTick(callback)
   }
 
-  async _del(key: Buffer, options: any, callback: (error?: Error) => void) {
+  async _del(key: string, options: any, callback: (error?: Error) => void) {
     if (this.debug) {
       console.log('RedisLevel#_del', key)
     }
@@ -356,7 +359,7 @@ export class RedisLevel<KDefault = string, VDefault = string> extends AbstractLe
       try {
         keys = await this.redis.zrange<string[]>(...query)
       } catch (e) {
-        console.log(e)
+        console.error(e)
       }
       if (!keys || keys.length === 0) {
         break
